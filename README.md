@@ -10,9 +10,13 @@ ASI mod for Resident Evil 5 Gold (Steam, DX9) that fixes PC controls and display
 
 ## Install
 
-1. Install an ASI loader (`dinput8.dll`) in the game folder.
-2. Copy `re5tweaks.asi` and `re5tweaks.ini` from the [latest release](../../releases/latest) into the game folder.
-3. Edit `re5tweaks.ini` or press Insert in game.
+1. Download the zip from the [latest release](../../releases/latest).
+2. Extract everything into the game folder, next to `re5dx9.exe` (usually `Steam\steamapps\common\Resident Evil 5`).
+3. Start the game. Press Insert for the settings menu, or edit `re5tweaks.ini`.
+
+The zip already includes the ASI loader (`dinput8.dll`), so nothing else is needed. If you already have a `dinput8.dll` from another mod, keep yours; it loads RE5 Tweaks too.
+
+To uninstall, delete `dinput8.dll`, `re5tweaks.asi` and `re5tweaks.ini`.
 
 ## Build
 
