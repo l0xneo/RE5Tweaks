@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <d3d9.h>
 #include <dinput.h>
 #include "imgui/imgui.h"
@@ -43,6 +44,24 @@ static float g_fpsCapF = 120.0f;
 static int g_shadow = 0;
 
 static char g_ini[MAX_PATH];
+
+static void Log(const char* f, ...)
+{
+    char path[MAX_PATH];
+    strcpy_s(path, g_ini);
+    char* e = strrchr(path, '.');
+    if (!e) return;
+    strcpy_s(e, MAX_PATH - (e - path), ".log");
+    FILE* fp = nullptr;
+    if (fopen_s(&fp, path, "a") || !fp) return;
+    fprintf(fp, "[%lu] ", GetTickCount());
+    va_list va;
+    va_start(va, f);
+    vfprintf(fp, f, va);
+    va_end(va);
+    fputc('\n', fp);
+    fclose(fp);
+}
 static bool g_armed = true;
 static BYTE g_res;
 static BYTE* g_player;
@@ -61,39 +80,76 @@ static AngleFn SetAngle = (AngleFn)0x489ce0;
 typedef void*(__thiscall* PerspFn)(void*, float, float, float, float);
 static PerspFn Perspective = (PerspFn)0x6d1650;
 
-static const DWORD kMouseSite = 0xb8c6e8;
-static const DWORD kMouseRet = 0xb8c6f0;
-static const DWORD kMouseSkip = 0xb8c70e;
-static const DWORD kQteJoin = 0x76714b;
-static const DWORD kQteBRet = 0x7670fd;
-static const DWORD kQteA[] = { 0x767000, 0x767016, 0x76702c, 0x767042, 0x767054 };
-static const DWORD kQteB = 0x7670f8;
-static const DWORD kPerspGame = 0x835c89;
-static const DWORD kPerspOther[] = { 0x4d6901, 0x5821a9 };
-static const DWORD kCatVol = 0x48e680;
-static const DWORD kRawAim = 0xb85fba;
-static const DWORD kLaserLine = 0xb77153;
-static const DWORD kLaserStart = 0xb76ea3;
-static const DWORD kLaserHit = 0xb771a6;
-static const DWORD kLaserHitRet = 0xb771ac;
-static const DWORD kLogoBoot = 0xbfbb1c;
-static const DWORD kLogoBootSkip = 0xbfbd44;
-static const DWORD kLogoMovie = 0xbfb8d6;
-static const DWORD kFov = 0x846e8c;
-static const DWORD kFovRet = 0x846e94;
-static const DWORD kUiScale[] = { 0x5de90f, 0x5dd236 };
-static const DWORD kFilter = 0x47bd08;
-static const DWORD kFps = 0x42706c;
-static const DWORD kFpsRet = 0x427074;
-static const DWORD kShadow = 0x63c8a5;
-static const DWORD kShadowRet = 0x63c8ae;
+static DWORD kMouseSite = 0xb8c6e8;
+static DWORD kMouseRet = 0xb8c6f0;
+static DWORD kMouseSkip = 0xb8c70e;
+static DWORD kQteJoin = 0x76714b;
+static DWORD kQteBRet = 0x7670fd;
+static DWORD kQteA[] = { 0x767000, 0x767016, 0x76702c, 0x767042, 0x767054 };
+static DWORD kQteB = 0x7670f8;
+static DWORD kPerspGame = 0x835c89;
+static DWORD kPerspOther[] = { 0x4d6901, 0x5821a9 };
+static DWORD kCatVol = 0x48e680;
+static DWORD kRawAim = 0xb85fba;
+static DWORD kLaserLine = 0xb77153;
+static DWORD kLaserStart = 0xb76ea3;
+static DWORD kLaserHit = 0xb771a6;
+static DWORD kLaserHitRet = 0xb771ac;
+static DWORD kLogoBoot = 0xbfbb1c;
+static DWORD kLogoBootSkip = 0xbfbd44;
+static DWORD kLogoMovie = 0xbfb8d6;
+static DWORD kFov = 0x846e8c;
+static DWORD kFovRet = 0x846e94;
+static DWORD kUiScale[] = { 0x5de90f, 0x5dd236 };
+static DWORD kFilter = 0x47bd08;
+static DWORD kFps = 0x42706c;
+static DWORD kFpsRet = 0x427074;
+static DWORD kShadow = 0x63c8a5;
+static DWORD kShadowRet = 0x63c8ae;
 
 static int* g_bind;
+static int g_lang = 0;
+#define T(en, es) (g_lang ? es : en)
 static bool g_hasRawAim, g_hasLaser, g_hasFilter, g_hasUi, g_hasPitch;
-static const DWORD kRunRecenter = 0x845acd;
-static const DWORD kAimStart = 0xb84cc2;
-static const DWORD kAimStartRet = 0xb84ccc;
+static DWORD kRunRecenter = 0x845acd;
+static DWORD kAimStart = 0xb84cc2;
+static DWORD kAimStartRet = 0xb84ccc;
 static char g_uiOrig[2][13];
+static DWORD kQteC[] = { 0x76bbc4, 0x76bbe0, 0x76bbfc, 0x76bc18, 0x76bc30 };
+static DWORD gEvent = 0x12340a4;
+static DWORD gMouse = 0x1249c78;
+static DWORD gSound = 0x1249c60;
+static DWORD gRes = 0x12337dc;
+static DWORD g_mouseOff = 0x6f4;
+static const char* g_mouseSig = "f30f1083f4060000";
+static const char* g_logoSig = "8b0d409c2401";
+static bool g_maluc;
+
+static void UseMaluc()
+{
+    g_maluc = true;
+    GetAngle = (AngleFn)0x4a30c0;
+    SetAngle = (AngleFn)0x4a25b0;
+    Perspective = (PerspFn)0x402920;
+    kMouseSite = 0xb8ba87; kMouseRet = 0xb8ba8f; kMouseSkip = 0xb8baad;
+    kQteB = 0x76bcda; kQteBRet = 0x76bcdf;
+    kPerspGame = 0x83a039; kPerspOther[0] = 0x4edcc1; kPerspOther[1] = 0x597e39;
+    kCatVol = 0x4a6eb0;
+    kRawAim = 0xb854b4;
+    kLaserLine = 0xb7685b; kLaserStart = 0xb765ab; kLaserHit = 0xb768ae; kLaserHitRet = 0xb768b4;
+    kLogoBoot = 0xbfaedc; kLogoBootSkip = 0xbfb104; kLogoMovie = 0xbfad1c;
+    kFov = 0x84b190; kFovRet = 0x84b198;
+    kUiScale[0] = 0x5f43df; kUiScale[1] = 0x5f2d06;
+    kFilter = 0x4945d8;
+    kFps = 0x44b45c; kFpsRet = 0x44b464;
+    kShadow = 0x652805; kShadowRet = 0x65280e;
+    kRunRecenter = 0x849dd0;
+    kAimStart = 0xb841c1; kAimStartRet = 0xb841cb;
+    gEvent = 0x123986c; gMouse = 0x123ad48; gSound = 0x123ad30; gRes = 0x1239860;
+    g_mouseOff = 0x6ec;
+    g_mouseSig = "f30f1083ec060000";
+    g_logoSig = "8b0d28ad2301";
+}
 
 static void Write(DWORD at, const void* src, int len)
 {
@@ -188,7 +244,7 @@ static void ApplyUi()
 
 static bool InEvent()
 {
-    BYTE* m = *(BYTE**)0x12340a4;
+    BYTE* m = *(BYTE**)gEvent;
     if (!m) return false;
     BYTE* e = *(BYTE**)(m + 0x1037c);
     return e && e[0x268];
@@ -199,12 +255,12 @@ static bool __stdcall MouseTurn(BYTE* ctrl, BYTE* player)
     g_player = player;
     if (!g_freeCam) return false;
     if (*(DWORD*)(player + 0x10e0) > 8) return false;
-    if (*(BYTE*)(player + 0x2920)) return false;
+    if (!g_maluc && *(BYTE*)(player + 0x2920)) return false;
     DWORD f = *(DWORD*)(player + 0x2d8c);
     if (f & 0xC0) return false;
     if ((f & 0x400) && !(f & 0x800)) return false;
-    float mx = *(float*)(ctrl + 0x6f4);
-    BYTE* sm = *(BYTE**)0x1249c78;
+    float mx = *(float*)(ctrl + g_mouseOff);
+    BYTE* sm = *(BYTE**)gMouse;
     if (g_rawMouse && sm) mx = (float)*(int*)(sm + 0x2c);
     if (mx == 0.0f) return true;
     float d = -mx * g_sens * 0.002f;
@@ -231,7 +287,10 @@ __declspec(naked) static void MouseStub()
         popad
         cmp g_res, 0
         jne skip
-        movss xmm0, dword ptr [ebx + 0x6f4]
+        push eax
+        mov eax, g_mouseOff
+        movss xmm0, dword ptr [ebx + eax]
+        pop eax
         jmp kMouseRet
     skip:
         jmp kMouseSkip
@@ -280,6 +339,27 @@ __declspec(naked) static void QteStubB()
         mov bl, al
         mov eax, dword ptr [esi + 0xc]
         jmp kQteBRet
+    }
+}
+
+__declspec(naked) static void QteStubC()
+{
+    __asm {
+        test al, al
+        jnz done
+        push ecx
+        push edx
+        call QtePressed
+        pop edx
+        pop ecx
+    done:
+        pop edi
+        pop ebp
+        mov byte ptr [esi + 5], 0
+        pop esi
+        mov bl, al
+        pop ebx
+        ret 8
     }
 }
 
@@ -410,7 +490,7 @@ static int __fastcall CatVol(BYTE* snd)
 {
     DWORD c = *(DWORD*)(snd + 0x48);
     if (c > 4) return 0;
-    BYTE* b = *(BYTE**)0x1249c60;
+    BYTE* b = *(BYTE**)gSound;
     int v = *(int*)(b + 0x3fdd0 + c * 4);
     float m = c == 1 ? g_music : (c == 0 || c == 2) ? g_sfx : 1.0f;
     if (g_cut != 1.0f && InEvent()) m *= g_cut;
@@ -476,12 +556,13 @@ static void SaveIni()
     sprintf_s(b, "%d", g_shadow); WritePrivateProfileStringA("Display", "ShadowResolution", b, g_ini);
     WritePrivateProfileStringA("Misc", "SkipIntroLogos", g_skipLogos ? "1" : "0", g_ini);
     WritePrivateProfileStringA("Overlay", "ToggleKey", KeyName(g_toggleKey), g_ini);
+    WritePrivateProfileStringA("Overlay", "Language", g_lang ? "ES" : "EN", g_ini);
 }
 
 static void KeyInput(const char* label, int* key)
 {
     char b[64];
-    sprintf_s(b, "%s##%s", g_bind == key ? "Press a key (Esc = none)" : KeyName(*key), label);
+    sprintf_s(b, "%s##%s", g_bind == key ? T("Press a key (Esc = none)", "Pulsa una tecla (Esc = ninguna)") : KeyName(*key), label);
     if (ImGui::Button(b, ImVec2(200, 0))) g_bind = key;
     ImGui::SameLine();
     ImGui::TextUnformatted(label);
@@ -502,53 +583,60 @@ static void PollBind()
 
 static void DrawMenu()
 {
-    ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_FirstUseEver);
-    ImGui::Begin("RE5 Tweaks 1.0.14", &g_menu);
-    if (ImGui::CollapsingHeader("Mouse", ImGuiTreeNodeFlags_DefaultOpen))
+    ImGui::SetNextWindowSize(ImVec2(460, 0), ImGuiCond_FirstUseEver);
+    ImGui::Begin("RE5 Tweaks 1.0.25 @l0xneo###main", &g_menu);
+    ImGui::SetNextItemWidth(200);
+    ImGui::Combo("Language / Idioma", &g_lang, "English\0Español\0");
+    if (ImGui::CollapsingHeader(T("Mouse###hm", "Ratón###hm"), ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::SliderFloat("Sensitivity", &g_sens, 0.1f, 5.0f, "%.2f");
-        ImGui::Checkbox("Free camera while moving", &g_freeCam);
-        ImGui::Checkbox("Raw mouse (turning)", &g_rawMouse);
-        if (ImGui::Checkbox("Raw aim", &g_rawAim)) ApplyRawAim();
+        ImGui::SetNextItemWidth(200);
+        ImGui::SliderFloat("##sens", &g_sens, 0.01f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(60);
+        if (ImGui::InputFloat("##sensbox", &g_sens, 0.0f, 0.0f, "%.2f")) { if (g_sens < 0.01f) g_sens = 0.01f; if (g_sens > 5.0f) g_sens = 5.0f; }
+        ImGui::SameLine();
+        ImGui::TextUnformatted(T("Sensitivity", "Sensibilidad"));
+        ImGui::Checkbox(T("Free camera while moving###fc", "Cámara libre al moverse###fc"), &g_freeCam);
+        ImGui::Checkbox(T("Raw mouse (turning)###rm", "Ratón directo (giro)###rm"), &g_rawMouse);
+        if (ImGui::Checkbox(T("Raw aim###ra", "Apuntado directo###ra"), &g_rawAim)) ApplyRawAim();
     }
-    if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader(T("Camera###hc", "Cámara###hc"), ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::SliderFloat("FOV additional", &g_fovAdd, -20.0f, 60.0f, "%.0f deg");
-        if (ImGui::Checkbox("Ultrawide fix (3D + HUD)", &g_ultrawide)) ApplyUi();
-        if (ImGui::Checkbox("Keep camera height while running", &g_keepPitch)) ApplyPitch();
-        ImGui::Checkbox("Aim starts level", &g_levelAim);
+        ImGui::SliderFloat(T("FOV additional###fov", "FOV adicional###fov"), &g_fovAdd, -20.0f, 60.0f, T("%.0f deg", "%.0f grados"));
+        if (ImGui::Checkbox(T("Ultrawide fix (3D + HUD)###uw", "Arreglo ultrapanorámico (3D + HUD)###uw"), &g_ultrawide)) ApplyUi();
+        if (ImGui::Checkbox(T("Keep camera height while running###kp", "Mantener altura de cámara al correr###kp"), &g_keepPitch)) ApplyPitch();
+        ImGui::Checkbox(T("Aim starts level###la", "Apuntar empieza nivelado###la"), &g_levelAim);
     }
-    if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader(T("Display###hd", "Pantalla###hd"), ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::Checkbox("Borderless", &g_borderless);
-        ImGui::Checkbox("Disable VSync (next reset)", &g_noVsync);
-        ImGui::Checkbox("Fix DPI scale (restart)", &g_dpi);
-        if (ImGui::Checkbox("Remove green colour filter", &g_noFilter)) ApplyFilter();
-        ImGui::Checkbox("Remove resolution limit (restart)", &g_resLimit);
-        if (ImGui::InputInt("FPS cap (0 = game)", &g_fpsCap, 10, 30)) { if (g_fpsCap < 0) g_fpsCap = 0; g_fpsCapF = (float)g_fpsCap; }
-        if (ImGui::InputInt("Shadow res (0 = game, reload)", &g_shadow, 256, 1024)) { if (g_shadow < 0) g_shadow = 0; if (g_shadow > 8192) g_shadow = 8192; }
+        ImGui::Checkbox(T("Borderless###bl", "Sin bordes###bl"), &g_borderless);
+        ImGui::Checkbox(T("Disable VSync (next reset)###vs", "Desactivar VSync (al reiniciar vídeo)###vs"), &g_noVsync);
+        ImGui::Checkbox(T("Fix DPI scale (restart)###dpi", "Corregir escala DPI (reiniciar)###dpi"), &g_dpi);
+        if (ImGui::Checkbox(T("Remove green colour filter###gf", "Quitar filtro de color verde###gf"), &g_noFilter)) ApplyFilter();
+        ImGui::Checkbox(T("Remove resolution limit (restart)###rl", "Quitar límite de resolución (reiniciar)###rl"), &g_resLimit);
+        if (ImGui::InputInt(T("FPS cap (0 = game)###fps", "Límite de FPS (0 = juego)###fps"), &g_fpsCap, 10, 30)) { if (g_fpsCap < 0) g_fpsCap = 0; g_fpsCapF = (float)g_fpsCap; }
+        if (ImGui::InputInt(T("Shadow res (0 = game, reload)###sh", "Res. sombras (0 = juego, recargar)###sh"), &g_shadow, 256, 1024)) { if (g_shadow < 0) g_shadow = 0; if (g_shadow > 8192) g_shadow = 8192; }
     }
-    if (ImGui::CollapsingHeader("Weapon", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader(T("Weapon###hw", "Arma###hw"), ImGuiTreeNodeFlags_DefaultOpen))
     {
-        if (ImGui::Checkbox("Laser sight from muzzle", &g_laser)) ApplyLaser();
-        ImGui::SliderFloat("Dot size on objects", &g_dotSize, 0.0f, 20.0f, "%.1f");
-        ImGui::SliderFloat("Dot size on enemy", &g_dotEnemy, 0.0f, 20.0f, "%.1f");
+        ImGui::SliderFloat(T("Dot size on objects###ds", "Tamaño del punto en objetos###ds"), &g_dotSize, 0.0f, 20.0f, "%.1f");
+        ImGui::SliderFloat(T("Dot size on enemy###de", "Tamaño del punto en enemigos###de"), &g_dotEnemy, 0.0f, 20.0f, "%.1f");
     }
-    if (ImGui::CollapsingHeader("Audio", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader(T("Audio###ha", "Audio###ha"), ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::SliderFloat("Music", &g_music, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderFloat("SFX", &g_sfx, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderFloat("Cutscene", &g_cut, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat(T("Music###mu", "Música###mu"), &g_music, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat(T("SFX###sfx", "Efectos###sfx"), &g_sfx, 0.0f, 1.0f, "%.2f");
+        ImGui::SliderFloat(T("Cutscene###cs", "Cinemáticas###cs"), &g_cut, 0.0f, 1.0f, "%.2f");
     }
-    if (ImGui::CollapsingHeader("Keys", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader(T("Keys###hk", "Teclas###hk"), ImGuiTreeNodeFlags_DefaultOpen))
     {
         PollBind();
-        KeyInput("QTE key", &g_qteKey);
-        KeyInput("QTE key 2", &g_qteKey2);
-        KeyInput("Overlay key", &g_toggleKey);
-        ImGui::Checkbox("Skip intro logos (restart)", &g_skipLogos);
+        KeyInput(T("QTE key", "Tecla QTE"), &g_qteKey);
+        KeyInput(T("QTE key 2", "Tecla QTE 2"), &g_qteKey2);
+        KeyInput(T("Overlay key", "Tecla del menú"), &g_toggleKey);
+        ImGui::Checkbox(T("Skip intro logos (restart)###sl", "Saltar logos de inicio (reiniciar)###sl"), &g_skipLogos);
     }
-    if (ImGui::Button("Save")) SaveIni();
+    if (ImGui::Button(T("Save###save", "Guardar###save"))) SaveIni();
     ImGui::End();
 }
 
@@ -613,9 +701,24 @@ static void DrawDot()
 
 static HRESULT __stdcall HookPresent(IDirect3DDevice9* dev, const RECT* a, const RECT* b, HWND c, const RGNDATA* d)
 {
+    static bool first = true;
+    if (first) { first = false; Log("first Present dev=%p hwnd=%p key=%02x", dev, g_hwnd, g_toggleKey); }
     bool down = (GetAsyncKeyState(g_toggleKey) & 0x8000) != 0;
-    if (down && !g_toggleDown) g_menu = !g_menu;
+    if (down && !g_toggleDown) { g_menu = !g_menu; Log("toggle menu=%d", g_menu); }
     g_toggleDown = down;
+    if (!g_hwnd)
+    {
+        D3DDEVICE_CREATION_PARAMETERS cp;
+        if (SUCCEEDED(dev->GetCreationParameters(&cp))) g_hwnd = cp.hFocusWindow;
+        Log("hwnd from device focus=%p", g_hwnd);
+        IDirect3DSwapChain9* sc = nullptr;
+        if (SUCCEEDED(dev->GetSwapChain(0, &sc)) && sc)
+        {
+            D3DPRESENT_PARAMETERS pp;
+            if (SUCCEEDED(sc->GetPresentParameters(&pp))) { if (pp.hDeviceWindow) g_hwnd = pp.hDeviceWindow; FixParams(&pp, g_hwnd); }
+            sc->Release();
+        }
+    }
     if (!g_imgui && g_hwnd)
     {
         ImGui::CreateContext();
@@ -626,6 +729,7 @@ static HRESULT __stdcall HookPresent(IDirect3DDevice9* dev, const RECT* a, const
         ImGui_ImplDX9_Init(dev);
         g_wndProc = (WNDPROC)SetWindowLongPtrA(g_hwnd, GWLP_WNDPROC, (LONG_PTR)HookWndProc);
         g_imgui = true;
+        Log("imgui init hwnd=%p wndproc=%p err=%lu", g_hwnd, g_wndProc, GetLastError());
     }
     bool dot = g_laser && g_laserVis && GetTickCount() - g_laserSeen <= 100;
     if (g_imgui && (g_menu || dot || g_laserSeq != g_laserLast))
@@ -672,12 +776,14 @@ static HRESULT __stdcall HookCreateDevice(IDirect3D9* d3d, UINT ad, D3DDEVTYPE t
 {
     FixParams(pp, focus);
     HRESULT hr = oCreateDevice(d3d, ad, t, focus, fl, pp, out);
+    Log("game CreateDevice hr=%08lx focus=%p devwnd=%p flags=%08lx windowed=%d %ux%u", hr, focus, pp->hDeviceWindow, fl, pp->Windowed, pp->BackBufferWidth, pp->BackBufferHeight);
     if (SUCCEEDED(hr) && out && *out)
     {
         g_hwnd = pp->hDeviceWindow ? pp->hDeviceWindow : focus;
         void** vt = *(void***)*out;
         PatchVt(vt, 16, HookReset, (void**)&oReset);
         PatchVt(vt, 17, HookPresent, (void**)&oPresent);
+        Log("game vt=%p Reset=%p Present=%p", vt, oReset, oPresent);
     }
     return hr;
 }
@@ -702,8 +808,27 @@ static void HookD3D()
     typedef IDirect3D9*(WINAPI* CreateFn)(UINT);
     CreateFn create = m ? (CreateFn)GetProcAddress(m, "Direct3DCreate9") : nullptr;
     IDirect3D9* d3d = create ? create(D3D_SDK_VERSION) : nullptr;
+    Log("d3d9 module=%p create=%p d3d=%p", m, create, d3d);
     if (!d3d) return;
     PatchVt(*(void***)d3d, 16, HookCreateDevice, (void**)&oCreateDevice);
+    Log("CreateDevice hooked orig=%p", oCreateDevice);
+    HWND w = CreateWindowA("STATIC", "", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, nullptr, nullptr);
+    D3DPRESENT_PARAMETERS pp = {};
+    pp.Windowed = TRUE;
+    pp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+    pp.hDeviceWindow = w;
+    IDirect3DDevice9* dev = nullptr;
+    HRESULT hr = w ? oCreateDevice(d3d, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, w, D3DCREATE_SOFTWARE_VERTEXPROCESSING | D3DCREATE_DISABLE_DRIVER_MANAGEMENT, &pp, &dev) : E_FAIL;
+    Log("dummy device wnd=%p hr=%08lx dev=%p", w, hr, dev);
+    if (SUCCEEDED(hr) && dev)
+    {
+        void** vt = *(void***)dev;
+        PatchVt(vt, 16, HookReset, (void**)&oReset);
+        PatchVt(vt, 17, HookPresent, (void**)&oPresent);
+        Log("dummy vt=%p Reset=%p Present=%p", vt, oReset, oPresent);
+        dev->Release();
+    }
+    if (w) DestroyWindow(w);
     d3d->Release();
 }
 
@@ -817,25 +942,45 @@ static void LoadIni(HMODULE h)
     g_shadow = GetPrivateProfileIntA("Display", "ShadowResolution", 0, g_ini);
     int k = IniKey("Overlay", "ToggleKey");
     if (k) g_toggleKey = k;
+    char lang[8];
+    GetPrivateProfileStringA("Overlay", "Language", "EN", lang, sizeof(lang), g_ini);
+    g_lang = _stricmp(lang, "ES") == 0;
 }
 
 static DWORD WINAPI Init(LPVOID)
 {
+    Log("---- RE5 Tweaks 1.0.25 start key=%02x", g_toggleKey);
     HookD3D();
     HookDInput();
-    for (int i = 0; i < 600 && !Match(kMouseSite, "f30f1083f4060000"); i++) Sleep(100);
+    for (int i = 0; i < 600 && !Match(kMouseSite, g_mouseSig); i++)
+    {
+        if (Match(0xb8ba87, "f30f1083ec060000")) { UseMaluc(); break; }
+        Sleep(100);
+    }
+    Log("exe maluc=%d steam=%d", g_maluc, Match(kMouseSite, g_mouseSig));
     if (g_skipLogos)
     {
-        if (Match(kLogoBoot, "8b0d409c2401")) Jmp(kLogoBoot, (void*)kLogoBootSkip, 6);
-        if (Match(kLogoMovie, "f7d8894610")) Hex(kLogoMovie, "834e10ff90");
+        if (Match(kLogoBoot, g_logoSig)) Jmp(kLogoBoot, (void*)kLogoBootSkip, 6);
+        if (!g_maluc && Match(kLogoMovie, "f7d8894610")) Hex(kLogoMovie, "834e10ff90");
+        if (g_maluc && Match(kLogoMovie, "f7d81bc0f7d8")) Hex(kLogoMovie, "83c8ff909090");
     }
-    if (Match(kMouseSite, "f30f1083f4060000")) Jmp(kMouseSite, MouseStub, 8);
+    if (Match(kMouseSite, g_mouseSig)) Jmp(kMouseSite, MouseStub, 8);
     g_hasRawAim = Match(kRawAim, "760a");
     ApplyRawAim();
     g_hasLaser = Match(kLaserLine, "32db") && Match(kLaserStart, "0f84db010000");
     ApplyLaser();
     if (g_hasLaser && Match(kLaserHit, "889ffa020000")) Jmp(kLaserHit, LaserHitStub, 6);
-    if (Match(kQteB, "8ad88b460c"))
+    if (g_maluc && Match(kQteB, "8ad88b460c"))
+    {
+        bool ok = true;
+        for (DWORD a : kQteC) ok = ok && Match(a, "5f5dc64605005e8ad85bc20800");
+        if (ok)
+        {
+            for (DWORD a : kQteC) Jmp(a, QteStubC, 6);
+            Jmp(kQteB, QteStubB, 5);
+        }
+    }
+    else if (Match(kQteB, "8ad88b460c"))
     {
         bool ok = true;
         for (DWORD a : kQteA) ok = ok && Match(a, "8ad8e9");
@@ -861,10 +1006,11 @@ static DWORD WINAPI Init(LPVOID)
     strcpy_s(g_uiOrig[0], "8b83e04e0000");
     strcpy_s(g_uiOrig[1], "8b81e04e0000");
     ApplyUi();
+    Log("patches rawaim=%d laser=%d filter=%d pitch=%d ui=%d", g_hasRawAim, g_hasLaser, g_hasFilter, g_hasPitch, g_hasUi);
     if (g_resLimit)
     {
-        for (int i = 0; i < 300 && !*(BYTE**)0x12337dc; i++) Sleep(100);
-        BYTE* r = *(BYTE**)0x12337dc;
+        for (int i = 0; i < 300 && !*(BYTE**)gRes; i++) Sleep(100);
+        BYTE* r = *(BYTE**)gRes;
         if (r)
         {
             *(DWORD*)(r + 0x50) = 0x20000;

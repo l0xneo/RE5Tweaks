@@ -1,15 +1,15 @@
 1 VERSIONINFO
-FILEVERSION 1,0,14,0
-PRODUCTVERSION 1,0,14,0
+FILEVERSION 1,0,25,0
+PRODUCTVERSION 1,0,25,0
 BEGIN
   BLOCK "StringFileInfo"
   BEGIN
     BLOCK "040904b0"
     BEGIN
       VALUE "FileDescription", "RE5 Tweaks"
-      VALUE "FileVersion", "1.0.14"
+      VALUE "FileVersion", "1.0.25"
       VALUE "ProductName", "RE5 Tweaks"
-      VALUE "ProductVersion", "1.0.14"
+      VALUE "ProductVersion", "1.0.25"
     END
   END
   BLOCK "VarFileInfo"
